@@ -8,52 +8,41 @@
   <link rel="stylesheet" href="styles/admin.css">
 </head>
 <body>
-  
-   
-
-   <div class="sidebar">
+  <!-- Sidebar -->
+  <div class="sidebar">
     <div class="nav-item active" onclick="showSection('dashboard', this)">Dashboard</div>
     <div class="nav-item" onclick="showSection('account-status', this)">Account Status</div>
     <div class="nav-item" onclick="showSection('logs', this)">Logs</div>
   </div>
 
-
-
+  <!-- Content -->
   <div class="content">
-    
+    <!-- Registration Form -->
     <div id="dashboard" class="section active">
       <h2>Registration Form</h2>
       <form id="registrationForm">
         <label>School ID:</label>
         <input type="text" id="school_id" required>
-
         <label>Username:</label>
         <input type="text" id="username" required>
-
         <label>Name:</label>
         <input type="text" id="name" required>
-
         <label>Lastname:</label>
         <input type="text" id="lastname" required>
-
         <label>Age:</label>
         <input type="number" id="age" required>
-
         <label>Email:</label>
         <input type="email" id="email" required>
-
         <label>Birthdate:</label>
         <input type="date" id="birthdate" required>
-
         <label>Password (auto-generated):</label>
         <input type="text" id="password" readonly>
-
         <button type="submit">Submit</button>
       </form>
       <div id="message"></div>
     </div>
 
-  
+    <!-- Account Status -->
     <div id="account-status" class="section">
       <h2>Account Status</h2>
       <table id="accountsTable">
@@ -70,7 +59,7 @@
       </table>
     </div>
 
-  
+    <!-- Logs -->
     <div id="logs" class="section">
       <h2>Logs</h2>
       <table id="logsTable">
@@ -89,9 +78,8 @@
 
   <script>
     const supabaseUrl = "https://ozthqxbitctlrmiukkor.supabase.co";
-  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96dGhxeGJpdGN0bHJtaXVra29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2OTU4ODAsImV4cCI6MjA3MjI3MTg4MH0.jOrD1HNW_48C_ZldY7XjYTX7wtJle6rSZ4w9azbBEnM"; // never use service_role in frontend
-  const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-
+    const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96dGhxeGJpdGN0bHJtaXVra29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2OTU4ODAsImV4cCI6MjA3MjI3MTg4MH0.jOrD1HNW_48C_ZldY7XjYTX7wtJle6rSZ4w9azbBEnM"; // ⚠️ use anon/public key only
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
     function showSection(id, element) {
       document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
@@ -104,49 +92,50 @@
     const passwordField = document.getElementById("password");
     const message = document.getElementById("message");
 
-   
+    // Auto-generate password
     form.addEventListener("input", () => {
       const name = document.getElementById("name").value.trim();
       const lastname = document.getElementById("lastname").value.trim();
-      if (name && lastname) {
-        passwordField.value = `@${name}.${lastname}123`;
+      if (name && lastname) passwordField.value = `${name}.${lastname}123`;
+    });
+
+    // Submit handler
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      message.style.color = "blue";
+      message.textContent = "⏳ Sending data to Supabase...";
+
+      const data = {
+        school_id: document.getElementById("school_id").value,
+        username: document.getElementById("username").value,
+        name: document.getElementById("name").value,
+        lastname: document.getElementById("lastname").value,
+        age: document.getElementById("age").value,
+        email: document.getElementById("email").value,
+        birthdate: document.getElementById("birthdate").value,
+        password: document.getElementById("password").value
+      };
+
+      const { data: inserted, error } = await supabase.from("users").insert([data]).select();
+      if (error) {
+        message.style.color = "red";
+        message.textContent = "❌ " + error.message;
+      } else {
+        message.style.color = "green";
+        message.textContent = "✅ Registration successful! Redirecting to Step 2...";
+        
+        const newUserId = inserted[0].id;
+
+        // Save current userId for Step 2
+        localStorage.setItem("currentUserId", newUserId);
+
+        // Redirect to face registration page
+        setTimeout(() => {
+          window.location.href = "faceregistration.html";
+        }, 1500);
       }
     });
 
- form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  // Show "sending" message first
-  message.style.color = "blue";
-  message.textContent = "⏳ Sending data to Supabase...";
-
-  const data = {
-    school_id: document.getElementById("school_id").value,
-    username: document.getElementById("username").value,
-    name: document.getElementById("name").value,
-    lastname: document.getElementById("lastname").value,
-    age: document.getElementById("age").value,
-    email: document.getElementById("email").value,
-    birthdate: document.getElementById("birthdate").value,
-    password: document.getElementById("password").value
-  };
-
-  const { error } = await supabase.from("users").insert([data]);
-
-  if (error) {
-    message.style.color = "red";
-    message.textContent = "❌ " + error.message;
-  } else {
-    message.style.color = "green";
-    message.textContent = "✅ Data sent and registration successful!";
-    form.reset();
-    passwordField.value = "";
-    loadAccounts();
-    addLog("Registered new user", data.username);
-  }
-});
-
-    // Load accounts
     async function loadAccounts() {
       const { data, error } = await supabase.from("users").select("*");
       if (!error) {
@@ -166,11 +155,6 @@
       }
     }
 
-    // Logs
-    async function addLog(action, user) {
-      await supabase.from("logs").insert([{ action, user }]);
-      loadLogs();
-    }
     async function loadLogs() {
       const { data, error } = await supabase.from("logs").select("*").order("id", { ascending: false });
       if (!error) {
@@ -189,7 +173,6 @@
       }
     }
 
-    // Initial load
     loadAccounts();
     loadLogs();
   </script>

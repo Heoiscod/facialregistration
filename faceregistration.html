@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Face Registration</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+    video {
+      border: 2px solid #333;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      margin-top: 15px;
+      background: #4CAF50;
+      border: none;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>Step 2: Face Registration</h2>
+  <video id="video" width="480" height="360" autoplay muted playsinline></video>
+  <br>
+  <button onclick="captureFace()">📸 Capture Face</button>
+  <div id="status">Initializing camera...</div>
+
+  <script>
+    // 🔹 Supabase config
+    const supabaseUrl = "https://ozthqxbitctlrmiukkor.supabase.co";
+    const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96dGhxeGJpdGN0bHJtaXVra29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2OTU4ODAsImV4cCI6MjA3MjI3MTg4MH0.jOrD1HNW_48C_ZldY7XjYTX7wtJle6rSZ4w9azbBEnM"; // use anon key only
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+    // 🔹 Luxand API key
+    const LUXAND_KEY = "a4c52a7ca9da4d6d9c794f4deec417bb"; // ⚠️ move to backend in production
+
+    // Get user ID from Step 1
+    let currentUserId = localStorage.getItem("currentUserId");
+    if (!currentUserId) {
+      alert("No user found. Please register first.");
+      window.location.href = "admin.html"; // redirect back if no user
+    }
+
+    const video = document.getElementById("video");
+    const statusDiv = document.getElementById("status");
+    let streamRef = null;
+
+    // Start webcam
+    async function startVideo() {
+      try {
+        streamRef = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = streamRef;
+        await video.play();
+        statusDiv.textContent = "✅ Camera ready! Position your face clearly.";
+      } catch (err) {
+        console.error("Camera error:", err);
+        statusDiv.textContent = "❌ Cannot access webcam! Enable permissions.";
+      }
+    }
+
+    // Capture and send to Luxand
+    async function captureFace() {
+      statusDiv.textContent = "⏳ Capturing face...";
+
+      // Take snapshot from <video>
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert snapshot → base64
+      const imageBase64 = canvas.toDataURL("image/jpeg").split(",")[1];
+
+      try {
+        // 🔹 Send to Luxand API
+        const response = await fetch("https://api.luxand.cloud/photo", {
+          method: "POST",
+          headers: {
+            "token": LUXAND_KEY,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ photo: imageBase64 })
+        });
+
+        const result = await response.json();
+        console.log("Luxand result:", result);
+
+        if (!result.faces || result.faces.length === 0) {
+          statusDiv.textContent = "❌ No face detected. Try again.";
+          return;
+        }
+
+        const luxandFaceId = result.faces[0].id;
+
+        // 🔹 Insert into Supabase (link Luxand face to user)
+        const { data, error } = await supabase.from("face_data").insert([
+          { user_id: currentUserId, luxand_face_id: luxandFaceId }
+        ]);
+
+        if (error) {
+          console.error("Supabase insert error:", error);
+          statusDiv.textContent = "❌ Failed to save face data.";
+        } else {
+          console.log("Inserted row:", data);
+          statusDiv.textContent = "✅ Face registered successfully!";
+          stopCamera();
+
+          // Optional: clear current user (so it won’t repeat)
+          localStorage.removeItem("currentUserId");
+
+          // Redirect back to Admin Panel
+          setTimeout(() => {
+            window.location.href = "admin.html";
+          }, 2000);
+        }
+
+      } catch (err) {
+        console.error("Luxand API error:", err);
+        statusDiv.textContent = "❌ Luxand API request failed.";
+      }
+    }
+
+    // Stop webcam
+    function stopCamera() {
+      if (streamRef) {
+        streamRef.getTracks().forEach(track => track.stop());
+        streamRef = null;
+      }
+    }
+    // Capture and send to Luxand
+async function captureFace() {
+  statusDiv.textContent = "⏳ Capturing face...";
+
+  // Take snapshot from <video>
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  // Convert snapshot → base64
+  const imageBase64 = canvas.toDataURL("image/jpeg").split(",")[1];
+
+  try {
+    // 🔹 Send to Luxand API
+    const response = await fetch("https://api.luxand.cloud/photo", {
+      method: "POST",
+      headers: {
+        "token": LUXAND_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ photo: imageBase64 })
+    });
+
+    const result = await response.json();
+    console.log("📡 Raw Luxand response:", result); // ✅ Debug log
+
+    // If API returned error
+    if (result.status === "error") {
+      statusDiv.textContent = `❌ Luxand error: ${result.message || "Unknown error"}`;
+      return;
+    }
+
+    // If no faces detected
+    if (!result.faces || result.faces.length === 0) {
+      statusDiv.textContent = "❌ No face detected. Try again.";
+      return;
+    }
+
+    const luxandFaceId = result.faces[0].id;
+
+    // 🔹 Insert into Supabase
+    const { data, error } = await supabase.from("face_data").insert([
+      { user_id: currentUserId, luxand_face_id: luxandFaceId }
+    ]);
+
+    if (error) {
+      console.error("❌ Supabase insert error:", error);
+      statusDiv.textContent = "❌ Failed to save face data.";
+    } else {
+      console.log("✅ Supabase insert success:", data);
+      statusDiv.textContent = "✅ Face registered successfully!";
+      stopCamera();
+
+      // Optional: clear current user (so it won’t repeat)
+      localStorage.removeItem("currentUserId");
+
+      // Redirect back to Admin Panel
+      setTimeout(() => {
+        window.location.href = "admin.html";
+      }, 2000);
+    }
+
+  } catch (err) {
+    console.error("❌ Luxand API request failed:", err);
+    statusDiv.textContent = "❌ Luxand API request failed (network issue).";
+  }
+}
+
+    // Init
+    startVideo();
+  </script>
+</body>
+</html>
